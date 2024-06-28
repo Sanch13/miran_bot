@@ -1,7 +1,7 @@
 import random
 
 from aiogram import types
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message, CallbackQuery
@@ -39,6 +39,15 @@ def get_inline_keyboard(is_admin: bool) -> InlineKeyboardMarkup:
     return keyboard
 
 
+def get_inline_menu() -> InlineKeyboardMarkup:
+    button = [
+        [InlineKeyboardButton(text="Меню", callback_data="get_main_keyboard")]
+    ]
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=button)
+    return keyboard
+
+
 @router.callback_query(lambda c: c.data == "participate")
 @check_subscribe
 async def participate_callback(callback_query: CallbackQuery, state: FSMContext, *args, **kwargs):
@@ -47,7 +56,7 @@ async def participate_callback(callback_query: CallbackQuery, state: FSMContext,
     if await user_exists(user_id):
         user_number = await get_user_number(user_id)
         await callback_query.answer('')
-        await bot.send_message(user_id, f"Вы уже участвуете в лотерее под номером {user_number}")
+        await bot.send_message(user_id, f"Вы уже участвуете в розыгрыше под номером {user_number}", reply_markup=get_inline_menu())
         logger.info(f"Зарегестрированный пользователь {user_id} с номером {user_number} нажал на кнопку 'Участвовать в розыгрыше'.")
     else:
         await state.set_state(Registration.fio)
@@ -65,7 +74,7 @@ async def process_name(message: Message, state: FSMContext):
 
     await add_user(user_id, full_name, status=True, fio=fio)
     user_number = await get_user_number(user_id)
-    await message.answer(f"Вы участвуете в лотерее под номером {user_number}")
+    await message.answer(f"Вы участвуете в розыгрыше под номером {user_number}")
     logger.info(f"Пользователь {fio} с id {user_id} добавлен в БД с лотерейным номером {user_number}.")
 
     await state.clear()
@@ -78,10 +87,10 @@ async def get_number_callback(callback_query: types.CallbackQuery, *args, **kwar
 
     user_number = await get_user_number(user_id)
     if user_number:
-        await bot.send_message(user_id, f"Ваш номер: {user_number}")
+        await bot.send_message(user_id, f"Ваш номер: {user_number}", reply_markup=get_inline_menu())
         logger.info(f"Пользователь с id {user_id} запросил свой лотерейный номер {user_number}.")
     else:
-        await bot.send_message(user_id, "Вы пока не участвуете в лотерее.")
+        await bot.send_message(user_id, "Вы пока не участвуете в розыгрыше.", reply_markup=get_inline_menu())
 
     await callback_query.answer()
 
@@ -90,17 +99,17 @@ async def get_number_callback(callback_query: types.CallbackQuery, *args, **kwar
 async def process_admin_action(callback_query: types.CallbackQuery):
     user_id = callback_query.from_user.id
 
-    if await is_user_admin(bot, settings.CHANNEL_ID_TEST_CHANNEL_MIRAN, user_id):
+    if await is_user_admin(bot, settings.CHANNEL_ID_MIRAN, user_id):
         result = await get_list_participants()
 
         if result is None:
-            await bot.send_message(user_id, "База даных пуста")
+            await bot.send_message(user_id, "База даных пуста", reply_markup=get_inline_menu())
         else:
             total = len(result)
             all_numbers_participants = f"[{result[0][0]} - {result[-1][0]}]"
             data = f"Всего участников: {total}  \nУчаствуют номера: {all_numbers_participants}\n"
             text_result = ''.join(f"{item[0]} - {item[1]}\n" for item in result)
-            await bot.send_message(user_id, data + text_result)
+            await bot.send_message(user_id, data + text_result, reply_markup=get_inline_menu())
 
     await callback_query.answer()
 
@@ -111,13 +120,13 @@ async def get_random_number_callback(callback_query: types.CallbackQuery):
     result = await get_list_participants()
 
     if result is None:
-        await bot.send_message(user_id, "База даных пуста")
+        await bot.send_message(user_id, "База даных пуста", reply_markup=get_inline_menu())
     else:
         logger.info(f"Определение случайного номера")
         number, fio = random.choice(result)
         logger.info(f"Победитель {fio} с номером {number}")
         answer_text = f"Победитель {fio} с номером {number}"
-        await bot.send_message(user_id, answer_text)
+        await bot.send_message(user_id, answer_text, reply_markup=get_inline_menu())
     await callback_query.answer()
 
 
@@ -125,6 +134,19 @@ async def get_random_number_callback(callback_query: types.CallbackQuery):
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
     logger.info(f"Пользователь {message.from_user.full_name} с id {message.from_user.id} нажал кнопку /start.")
-    is_admin = await is_user_admin(bot, settings.CHANNEL_ID_TEST_CHANNEL_MIRAN, user_id)
+    is_admin = await is_user_admin(bot, settings.CHANNEL_ID_MIRAN, user_id)
     keyboard = get_inline_keyboard(is_admin=is_admin)
-    await message.answer(text="""Выберите одно из двух действии.\nЧтобы участвовать в розыгрыше Алисы нажмите на 'Участвовать в розыгрыше' и вам присвоят номер. \nЧтобы узнать свой номер участия нажмите на 'Узнать свой номер'.""", reply_markup=keyboard)
+    await message.answer(text="""Чтобы участвовать в розыгрыше Алисы, нажмите на "Нужна Алиса" и вам присвоят номер.\nЧтобы узнать свой номер участия, нажмите на "Узнать свой номер".""", reply_markup=keyboard)
+
+
+@router.callback_query(lambda c: c.data == "get_main_keyboard")
+async def cmd_menu(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+
+    is_admin = await is_user_admin(bot, settings.CHANNEL_ID_MIRAN, user_id)
+    keyboard = get_inline_keyboard(is_admin=is_admin)
+    await bot.send_message(user_id,
+                           text="""Чтобы участвовать в розыгрыше Алисы, нажмите на "Нужна Алиса" и вам присвоят номер.\nЧтобы узнать свой номер участия, нажмите на "Узнать свой номер".""",
+                           reply_markup=keyboard)
+
+    await callback_query.answer()

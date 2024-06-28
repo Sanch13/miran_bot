@@ -12,14 +12,14 @@ def check_subscribe(func):
         user_full_name = message.from_user.full_name
         user_id = message.from_user.id
         logger.info(f"Проверка подписки с id {user_id} для ({user_full_name}).")
-        status = await bot.get_chat_member(chat_id=settings.CHANNEL_ID_TEST_CHANNEL_MIRAN, user_id=user_id)
+        status = await bot.get_chat_member(chat_id=settings.CHANNEL_ID_MIRAN, user_id=user_id)
         if status.status in ('member', 'creator', 'administrator'):
             logger.info(f"Пользователь {user_full_name} с id {user_id} подписан.")
             await func(message, state)
         else:
             text = f"Привет, {user_full_name or ''}." \
                    f"\nВы не подписаны на телеграм-канал  {settings.CHANNEL_LINK}." \
-                   f"\nЧтобы пользоваться ботом подпишитесь!!!"
+                   f"\nЧтобы пользоваться ботом, подпишитесь пожалуйста!!!"
             logger.info(f"Пользователь {user_full_name} с id {user_id} не подписан.")
             await message.answer('')
             await bot.send_message(user_id, text=text)
